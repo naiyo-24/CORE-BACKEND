@@ -34,6 +34,11 @@ def get_db():
     finally:
         db.close()
 
+
+# Import all models here to ensure they are registered with SQLAlchemy's Base
+from models.auth import admin_models, student_models
+from models.courses import course_models
+
 # Function to create all tables
 def create_tables():
     Base.metadata.create_all(bind=engine)
