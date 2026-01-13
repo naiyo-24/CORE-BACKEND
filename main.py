@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from db import create_tables
 from routes.auth import admin_routes
+from routes.courses import course_routes
 
 # Create FastAPI app
 app = FastAPI(
@@ -32,6 +33,7 @@ def health_check():
 
 # Register routers
 app.include_router(admin_routes.router)
+app.include_router(course_routes.router)
 
 # Create database tables on startup
 @app.on_event("startup")
