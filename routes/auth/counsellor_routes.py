@@ -96,6 +96,7 @@ async def create_counsellor(
     upi_id: Optional[str] = Form(None),
     password: str = Form(...),
     profile_photo: Optional[UploadFile] = File(None),
+    profile_photo_path: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     # uniqueness checks
@@ -115,7 +116,7 @@ async def create_counsellor(
             raise HTTPException(status_code=400, detail="Invalid per_courses_commission format. Provide JSON mapping of course_id to percentage.")
         commission_map = validate_and_get_course_details(db, commission_map)
 
-    # handle profile photo save
+    # handle profile photo save or accept existing path string
     profile_photo_path = None
     if profile_photo:
         uploads_dir = Path("uploads") / "counsellor" / counsellor_id
@@ -126,6 +127,9 @@ async def create_counsellor(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(profile_photo.file, buffer)
         profile_photo_path = os.path.relpath(str(file_path), os.getcwd())
+    elif profile_photo_path:
+        # client provided existing path string (don't copy file)
+        profile_photo_path = profile_photo_path
 
     db_obj = Counsellor(
         counsellor_id=counsellor_id,
@@ -202,6 +206,7 @@ async def update_counsellor(
     upi_id: Optional[str] = Form(None),
     password: Optional[str] = Form(None),
     profile_photo: Optional[UploadFile] = File(None),
+    profile_photo_path: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     counsellor = db.query(Counsellor).filter_by(counsellor_id=counsellor_id).first()
@@ -247,7 +252,7 @@ async def update_counsellor(
     for k, v in update_data.items():
         setattr(counsellor, k, v)
 
-    # profile photo
+    # profile photo: prefer uploaded file, fallback to provided path string
     if profile_photo:
         uploads_dir = Path("uploads") / "counsellor" / counsellor_id
         uploads_dir.mkdir(parents=True, exist_ok=True)
@@ -257,6 +262,8 @@ async def update_counsellor(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(profile_photo.file, buffer)
         counsellor.profile_photo = os.path.relpath(str(file_path), os.getcwd())
+    elif profile_photo_path:
+        counsellor.profile_photo = profile_photo_path
 
     counsellor.updated_at = datetime.utcnow()
     db.commit()
