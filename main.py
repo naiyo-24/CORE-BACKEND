@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from db import create_tables
 from routes.auth import admin_routes, student_routes, teacher_routes, counsellor_routes
 from routes.courses import course_routes
+from routes.classroom import classroom_routes
 
 # Create FastAPI app
 app = FastAPI(
@@ -41,6 +42,7 @@ app.include_router(course_routes.router)
 app.include_router(student_routes.router)
 app.include_router(teacher_routes.router)
 app.include_router(counsellor_routes.router)
+app.include_router(classroom_routes.router)
 
 # Create database tables on startup
 @app.on_event("startup")

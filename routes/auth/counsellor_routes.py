@@ -76,7 +76,7 @@ class CounsellorOut(CounsellorBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Create Counsellor API
 @router.post("/create", response_model=CounsellorOut, status_code=status.HTTP_201_CREATED)

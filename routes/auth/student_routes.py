@@ -54,7 +54,7 @@ class StudentOut(StudentBase):
 	course_name: Optional[str] = None
 
 	class Config:
-		orm_mode = True
+		from_attributes = True
 
 # Create Student with profile photo upload
 @router.post("/create", response_model=StudentOut, status_code=status.HTTP_201_CREATED)
@@ -98,7 +98,7 @@ async def create_student(
 		with open(file_path, "wb") as buffer:
 			shutil.copyfileobj(profile_photo.file, buffer)
 		# Always use relative path from project root
-		profile_photo_path = str(file_path.relative_to(Path().cwd()))
+		profile_photo_path = os.path.relpath(str(file_path), os.getcwd())
 	# Parse JSON fields
 	interests_list = json.loads(interests) if interests else None
 	hobbies_list = json.loads(hobbies) if hobbies else None
@@ -139,7 +139,7 @@ def get_all_students(db: Session = Depends(get_db)):
 		profile_photo_path = None
 		if s.profile_photo:
 			try:
-				profile_photo_path = str(Path(s.profile_photo).relative_to(Path().cwd()))
+				profile_photo_path = os.path.relpath(str(Path(s.profile_photo)), os.getcwd())
 			except Exception:
 				profile_photo_path = s.profile_photo
 		result.append(StudentOut(**{**s.__dict__, "profile_photo": profile_photo_path}, course_name=course_name))
@@ -156,7 +156,7 @@ def get_student_by_id(student_id: str, db: Session = Depends(get_db)):
 	profile_photo_path = None
 	if student.profile_photo:
 		try:
-			profile_photo_path = str(Path(student.profile_photo).relative_to(Path().cwd()))
+			profile_photo_path = os.path.relpath(str(Path(student.profile_photo)), os.getcwd())
 		except Exception:
 			profile_photo_path = student.profile_photo
 	return StudentOut(**{**student.__dict__, "profile_photo": profile_photo_path}, course_name=course_name)
