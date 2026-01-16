@@ -157,6 +157,27 @@ async def create_counsellor(
 
     return CounsellorOut(**{**db_obj.__dict__})
 
+
+# Counsellor login (email + password)
+@router.post("/login", response_model=CounsellorOut)
+def counsellor_login(
+    email: EmailStr = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    counsellor = db.query(Counsellor).filter_by(email=email).first()
+    if not counsellor or counsellor.password != password:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+
+    profile_photo_path = None
+    if counsellor.profile_photo:
+        try:
+            profile_photo_path = os.path.relpath(str(Path(counsellor.profile_photo)), os.getcwd())
+        except Exception:
+            profile_photo_path = counsellor.profile_photo
+
+    return CounsellorOut(**{**counsellor.__dict__, "profile_photo": profile_photo_path})
+
 # GET all counsellors
 @router.get("/get-all", response_model=List[CounsellorOut])
 def get_all_counsellors(db: Session = Depends(get_db)):
