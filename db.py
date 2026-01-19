@@ -39,6 +39,7 @@ def get_db():
 from models.auth import admin_models, student_models, teacher_models, counsellor_models
 from models.courses import course_models
 from models.aboutus import about_us_models
+from models.help_center import help_center_models
 
 # Function to create all tables
 def create_tables():

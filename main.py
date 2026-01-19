@@ -5,6 +5,7 @@ from db import create_tables
 from routes.auth import admin_routes, student_routes, teacher_routes, counsellor_routes
 from routes.courses import course_routes
 from routes.aboutus import about_us_routes
+from routes.help_center import help_center_routes
 
 # Create FastAPI app
 app = FastAPI(
@@ -40,6 +41,7 @@ def health_check():
 app.include_router(admin_routes.router)
 app.include_router(course_routes.router)
 app.include_router(about_us_routes.router)
+app.include_router(help_center_routes.router)
 app.include_router(student_routes.router)
 app.include_router(teacher_routes.router)
 app.include_router(counsellor_routes.router)
