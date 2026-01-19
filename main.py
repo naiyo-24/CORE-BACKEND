@@ -4,7 +4,6 @@ from fastapi.staticfiles import StaticFiles
 from db import create_tables
 from routes.auth import admin_routes, student_routes, teacher_routes, counsellor_routes
 from routes.courses import course_routes
-from routes.classroom import classroom_routes
 
 # Create FastAPI app
 app = FastAPI(
