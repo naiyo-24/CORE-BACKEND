@@ -40,6 +40,8 @@ from models.auth import admin_models, student_models, teacher_models, counsellor
 from models.courses import course_models
 from models.aboutus import about_us_models
 from models.help_center import help_center_models
+from models.admission import admission_code_models
+from models.admission import admission_enquiry_models
 
 # Function to create all tables
 def create_tables():

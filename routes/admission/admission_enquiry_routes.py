@@ -1,0 +1,198 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, EmailStr
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from datetime import datetime
+
+from db import get_db
+from models.admission.admission_enquiry_models import AdmissionEnquiry
+from models.auth.counsellor_models import Counsellor
+from models.admission.admission_code_models import AdmissionCode
+from models.courses.course_models import Course
+from services.admission_enquiry_id_generator import generate_admission_enquiry_id
+
+router = APIRouter(prefix="/api/admission-enquiries", tags=["AdmissionEnquiries"])
+
+
+class AdmissionEnquiryBase(BaseModel):
+    student_name: str
+    student_phn_no: str
+    student_alternative_phn_no: Optional[str] = None
+    student_email: Optional[EmailStr] = None
+    student_address: Optional[str] = None
+    course_id: str
+    guardian_name: Optional[str] = None
+    guardian_phn_no: Optional[str] = None
+    fit_medically: Optional[bool] = False
+    meets_height_requirements: Optional[bool] = False
+    meets_weight_requirements: Optional[bool] = False
+    meets_vision_standards: Optional[bool] = False
+    counsellor_id: str
+    admission_code: str
+
+
+class AdmissionEnquiryCreate(AdmissionEnquiryBase):
+    pass
+
+
+class AdmissionEnquiryUpdate(BaseModel):
+    student_name: Optional[str] = None
+    student_phn_no: Optional[str] = None
+    student_alternative_phn_no: Optional[str] = None
+    student_email: Optional[EmailStr] = None
+    student_address: Optional[str] = None
+    guardian_name: Optional[str] = None
+    guardian_phn_no: Optional[str] = None
+    fit_medically: Optional[bool] = None
+    meets_height_requirements: Optional[bool] = None
+    meets_weight_requirements: Optional[bool] = None
+    meets_vision_standards: Optional[bool] = None
+    counsellor_id: Optional[str] = None
+    admission_code: Optional[str] = None
+
+
+class AdmissionEnquiryResponse(AdmissionEnquiryBase):
+    enquiry_id: str
+    created_at: datetime
+    updated_at: datetime
+    course_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+@router.post("/create", response_model=AdmissionEnquiryResponse, status_code=status.HTTP_201_CREATED)
+def create_admission_enquiry(payload: AdmissionEnquiryCreate, db: Session = Depends(get_db)):
+    # validate counsellor
+    counsellor = db.query(Counsellor).filter_by(counsellor_id=payload.counsellor_id).first()
+    if not counsellor:
+        raise HTTPException(status_code=404, detail="Counsellor not found")
+
+    # validate admission code (mandatory) and ownership
+    ac = db.query(AdmissionCode).filter_by(admission_code=payload.admission_code).first()
+    if not ac:
+        raise HTTPException(status_code=404, detail="Admission code not found")
+    if ac.counsellor_id != payload.counsellor_id:
+        raise HTTPException(status_code=403, detail="Admission code not assigned to this counsellor")
+
+    # validate course (mandatory)
+    course = db.query(Course).filter_by(course_id=payload.course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    now = datetime.utcnow()
+    enquiry_id = generate_admission_enquiry_id(now)
+
+    # ensure unique enquiry_id
+    while db.query(AdmissionEnquiry).filter_by(enquiry_id=enquiry_id).first():
+        now = datetime.utcnow()
+        enquiry_id = generate_admission_enquiry_id(now)
+
+    enq = AdmissionEnquiry(
+        enquiry_id=enquiry_id,
+        counsellor_id=payload.counsellor_id,
+        student_name=payload.student_name,
+        student_phn_no=payload.student_phn_no,
+        student_alternative_phn_no=payload.student_alternative_phn_no,
+        student_email=str(payload.student_email) if payload.student_email else None,
+        student_address=payload.student_address,
+        guardian_name=payload.guardian_name,
+        guardian_phn_no=payload.guardian_phn_no,
+        fit_medically=payload.fit_medically or False,
+        meets_height_requirements=payload.meets_height_requirements or False,
+        meets_weight_requirements=payload.meets_weight_requirements or False,
+        meets_vision_standards=payload.meets_vision_standards or False,
+        admission_code=payload.admission_code,
+        course_id=payload.course_id,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(enq)
+    db.commit()
+    db.refresh(enq)
+    return enq
+
+
+@router.get("/get-all", response_model=List[AdmissionEnquiryResponse])
+def get_all_enquiries(db: Session = Depends(get_db)):
+    items = db.query(AdmissionEnquiry).all()
+    result = []
+    for item in items:
+        data = {k: v for k, v in item.__dict__.items() if not k.startswith("_")}
+        course = None
+        if item.course_id:
+            course = db.query(Course).filter_by(course_id=item.course_id).first()
+        data["course_name"] = course.course_name if course else None
+        result.append(data)
+    return result
+
+
+@router.get("/get-by/{enquiry_id}", response_model=AdmissionEnquiryResponse)
+def get_enquiry(enquiry_id: str, db: Session = Depends(get_db)):
+    item = db.query(AdmissionEnquiry).filter_by(enquiry_id=enquiry_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Admission enquiry not found")
+    data = {k: v for k, v in item.__dict__.items() if not k.startswith("_")}
+    course = None
+    if item.course_id:
+        course = db.query(Course).filter_by(course_id=item.course_id).first()
+    data["course_name"] = course.course_name if course else None
+    return data
+
+
+@router.put("/put-by/{enquiry_id}", response_model=AdmissionEnquiryResponse)
+def update_enquiry(enquiry_id: str, payload: AdmissionEnquiryUpdate, db: Session = Depends(get_db)):
+    item = db.query(AdmissionEnquiry).filter_by(enquiry_id=enquiry_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Admission enquiry not found")
+
+    # determine the counsellor that will own this enquiry after update
+    new_counsellor_id = payload.counsellor_id if payload.counsellor_id is not None else item.counsellor_id
+
+    # if admission_code is being changed, validate it and ownership against new counsellor
+    if payload.admission_code is not None:
+        if payload.admission_code:
+            ac = db.query(AdmissionCode).filter_by(admission_code=payload.admission_code).first()
+            if not ac:
+                raise HTTPException(status_code=404, detail="Admission code not found")
+            if ac.counsellor_id != new_counsellor_id:
+                raise HTTPException(status_code=403, detail="Admission code not assigned to this counsellor")
+        item.admission_code = payload.admission_code
+
+    if payload.course_id is not None:
+        if payload.course_id:
+            course = db.query(Course).filter_by(course_id=payload.course_id).first()
+            if not course:
+                raise HTTPException(status_code=404, detail="Course not found")
+        item.course_id = payload.course_id
+
+    # if counsellor is being changed but admission_code remains, ensure existing code belongs to new counsellor
+    if payload.counsellor_id is not None:
+        counsellor = db.query(Counsellor).filter_by(counsellor_id=payload.counsellor_id).first()
+        if not counsellor:
+            raise HTTPException(status_code=404, detail="Counsellor not found")
+        # check ownership of existing admission_code
+        existing_ac = db.query(AdmissionCode).filter_by(admission_code=item.admission_code).first()
+        if existing_ac and existing_ac.counsellor_id != payload.counsellor_id:
+            raise HTTPException(status_code=403, detail="Existing admission code not assigned to the new counsellor")
+        item.counsellor_id = payload.counsellor_id
+
+    for field, value in payload.dict(exclude_unset=True).items():
+        if hasattr(item, field) and field not in ("counsellor_id", "admission_code"):
+            setattr(item, field, value)
+
+    item.updated_at = datetime.utcnow()
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.delete("/delete-by/{enquiry_id}", response_model=dict)
+def delete_enquiry(enquiry_id: str, db: Session = Depends(get_db)):
+    item = db.query(AdmissionEnquiry).filter_by(enquiry_id=enquiry_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Admission enquiry not found")
+    db.delete(item)
+    db.commit()
+    return {"detail": "Deleted successfully"}

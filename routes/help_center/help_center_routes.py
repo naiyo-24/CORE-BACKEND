@@ -28,7 +28,7 @@ class HelpCenterResponse(HelpCenterCreate):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Create a new help report

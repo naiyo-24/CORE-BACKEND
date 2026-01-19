@@ -6,6 +6,8 @@ from routes.auth import admin_routes, student_routes, teacher_routes, counsellor
 from routes.courses import course_routes
 from routes.aboutus import about_us_routes
 from routes.help_center import help_center_routes
+from routes.admission import admission_code_routes
+from routes.admission import admission_enquiry_routes
 
 # Create FastAPI app
 app = FastAPI(
@@ -45,6 +47,8 @@ app.include_router(help_center_routes.router)
 app.include_router(student_routes.router)
 app.include_router(teacher_routes.router)
 app.include_router(counsellor_routes.router)
+app.include_router(admission_code_routes.router)
+app.include_router(admission_enquiry_routes.router)
 
 # Create database tables on startup
 @app.on_event("startup")

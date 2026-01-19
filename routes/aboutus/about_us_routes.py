@@ -35,7 +35,7 @@ class AboutUsResponse(AboutUsBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Create AboutUs entry
 @router.post("/create", response_model=AboutUsResponse)
