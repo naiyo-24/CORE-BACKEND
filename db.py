@@ -38,6 +38,7 @@ def get_db():
 # Import all models here to ensure they are registered with SQLAlchemy's Base
 from models.auth import admin_models, student_models, teacher_models, counsellor_models
 from models.courses import course_models
+from models.aboutus import about_us_models
 
 # Function to create all tables
 def create_tables():
