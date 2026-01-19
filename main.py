@@ -42,7 +42,6 @@ app.include_router(course_routes.router)
 app.include_router(student_routes.router)
 app.include_router(teacher_routes.router)
 app.include_router(counsellor_routes.router)
-app.include_router(classroom_routes.router)
 
 # Create database tables on startup
 @app.on_event("startup")
