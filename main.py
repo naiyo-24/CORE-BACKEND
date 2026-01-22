@@ -11,6 +11,8 @@ from routes.admission import admission_code_routes
 from routes.admission import admission_enquiry_routes
 from routes.ads import ads_routes
 from routes.announcement import announcement_routes
+from routes.salary import salary_routes
+
 # Create FastAPI app
 app = FastAPI(
     title="VWINGS24X7 Backend API",
@@ -56,6 +58,7 @@ app.include_router(admission_code_routes.router)
 app.include_router(admission_enquiry_routes.router)
 app.include_router(ads_routes.router)
 app.include_router(announcement_routes.router)
+app.include_router(salary_routes.router)
 
 # Create database tables on startup
 @app.on_event("startup")
