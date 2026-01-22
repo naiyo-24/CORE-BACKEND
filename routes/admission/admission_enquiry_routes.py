@@ -146,7 +146,30 @@ def get_enquiry(enquiry_id: str, db: Session = Depends(get_db)):
     data["counsellor_name"] = counsellor.full_name if counsellor and hasattr(counsellor, "full_name") else None
     return data
 
+# Define a separate model for status update
+class AdmissionEnquiryStatusUpdate(BaseModel):
+    status: str
 
+# Separate endpoint to update only the status
+@router.put("/update-status/{enquiry_id}", response_model=AdmissionEnquiryResponse)
+def update_enquiry_status(enquiry_id: str, payload: AdmissionEnquiryStatusUpdate, db: Session = Depends(get_db)):
+    item = db.query(AdmissionEnquiry).filter_by(enquiry_id=enquiry_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Admission enquiry not found")
+    item.status = payload.status
+    item.updated_at = datetime.utcnow()
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    # Attach course_name and counsellor_name for response
+    data = {k: v for k, v in item.__dict__.items() if not k.startswith("_")}
+    course = db.query(Course).filter_by(course_id=data.get("course_id")).first() if data.get("course_id") else None
+    counsellor = db.query(Counsellor).filter_by(counsellor_id=data.get("counsellor_id")).first() if data.get("counsellor_id") else None
+    data["course_name"] = course.course_name if course else None
+    data["counsellor_name"] = counsellor.full_name if counsellor and hasattr(counsellor, "full_name") else None
+    return data
+
+# Full update of enquiry by ID
 @router.put("/put-by/{enquiry_id}", response_model=AdmissionEnquiryResponse)
 def update_enquiry(enquiry_id: str, payload: AdmissionEnquiryUpdate, db: Session = Depends(get_db)):
     item = db.query(AdmissionEnquiry).filter_by(enquiry_id=enquiry_id).first()
