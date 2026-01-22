@@ -30,6 +30,8 @@ class AdmissionEnquiry(Base):
     # optional course reference
     course_id = Column(String, ForeignKey("courses.course_id"), nullable=True, index=True)
 
+    status = Column(String, nullable=False, default="pending")  # converted/contacted/cancelled/pending
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -38,4 +40,4 @@ class AdmissionEnquiry(Base):
     course = relationship("Course", backref="admission_enquiries")
 
     def __repr__(self):
-        return f"<AdmissionEnquiry(enquiry_id={self.enquiry_id}, student_name={self.student_name})>"
+        return f"<AdmissionEnquiry(enquiry_id={self.enquiry_id}, student_name={self.student_name}, status={self.status})>"

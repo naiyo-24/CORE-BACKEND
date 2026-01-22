@@ -29,6 +29,7 @@ class AdmissionEnquiryBase(BaseModel):
     meets_vision_standards: Optional[bool] = False
     counsellor_id: str
     admission_code: str
+    status: Optional[str] = "pending"  # converted/contacted/cancelled/pending
 
 
 class AdmissionEnquiryCreate(AdmissionEnquiryBase):
@@ -49,6 +50,7 @@ class AdmissionEnquiryUpdate(BaseModel):
     meets_vision_standards: Optional[bool] = None
     counsellor_id: Optional[str] = None
     admission_code: Optional[str] = None
+    status: Optional[str] = None
 
 
 class AdmissionEnquiryResponse(AdmissionEnquiryBase):
@@ -104,6 +106,7 @@ def create_admission_enquiry(payload: AdmissionEnquiryCreate, db: Session = Depe
         meets_vision_standards=payload.meets_vision_standards or False,
         admission_code=payload.admission_code,
         course_id=payload.course_id,
+        status=payload.status if payload.status else "pending",
         created_at=now,
         updated_at=now,
     )
@@ -180,6 +183,10 @@ def update_enquiry(enquiry_id: str, payload: AdmissionEnquiryUpdate, db: Session
     for field, value in payload.dict(exclude_unset=True).items():
         if hasattr(item, field) and field not in ("counsellor_id", "admission_code"):
             setattr(item, field, value)
+
+    # update status if provided
+    if payload.status is not None:
+        item.status = payload.status
 
     item.updated_at = datetime.utcnow()
     db.add(item)
