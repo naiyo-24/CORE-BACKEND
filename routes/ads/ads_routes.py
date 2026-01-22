@@ -30,7 +30,7 @@ class AdvertisementOut(AdvertisementBase):
 	updated_at: Optional[datetime]
 
 	class Config:
-		orm_mode = True
+		from_attributes = True
 
 # Helper for image upload path
 def save_ad_image(ad_id: int, file: UploadFile) -> str:

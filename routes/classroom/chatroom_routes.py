@@ -104,7 +104,7 @@ class ChatMessageOut(BaseModel):
 	timestamp: datetime
 
 	class Config:
-		orm_mode = True
+		from_attributes = True
 
 # REST endpoint: get chat message history (members/admins only)
 @router.get("/history/{classroom_id}/{user_id}", response_model=List[ChatMessageOut])

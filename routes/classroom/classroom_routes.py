@@ -23,7 +23,7 @@ class ClassroomResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 router = APIRouter(prefix="/api/classrooms", tags=["Classrooms"])
 

@@ -28,7 +28,7 @@ class AnnouncementOut(BaseModel):
 	updated_at: datetime
 
 	class Config:
-		orm_mode = True
+		from_attributes = True
 
 # Create announcement
 @router.post("/create", response_model=AnnouncementOut, status_code=status.HTTP_201_CREATED)

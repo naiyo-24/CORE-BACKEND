@@ -39,7 +39,7 @@ class MemberResponse(BaseModel):
 	updated_at: Optional[datetime] = None
 
 	class Config:
-		orm_mode = True
+		from_attributes = True
 
 # Helper to get or create Member row for a classroom
 def get_or_create_member_row(db: Session, class_id: str):

@@ -14,41 +14,68 @@ router = APIRouter(prefix="/api/salary-slips", tags=["Salary Slips"])
 # Pydantic Schemas
 from pydantic import BaseModel
 
-class SalarySlipBase(BaseModel):
+
+# Teacher info to include in responses (exclude sensitive fields)
+class TeacherInfo(BaseModel):
+	teacher_id: str
+	full_name: str
+	phone_no: str
+	email: str
+	courses_assigned: Optional[list] = None
+	profile_photo: Optional[str] = None
+	monthly_salary: Optional[float] = None
+	bank_account_no: Optional[str] = None
+	bank_account_name: Optional[str] = None
+	bank_branch_name: Optional[str] = None
+	ifsc_code: Optional[str] = None
+	upiid: Optional[str] = None
+
+
+class SalarySlipCreate(BaseModel):
 	teacher_id: str
 	transaction_id: str
 	month: str
 	year: int
 	basic_salary: float
-	# percentages
 	pa_percent: Optional[float] = 0.0
 	da_percent: Optional[float] = 0.0
 	pf_percent: Optional[float] = 0.0
 	si_percent: Optional[float] = 0.0
-	# absolute amount deductions
 	deductions: Optional[float] = 0.0
 
-class SalarySlipCreate(SalarySlipBase):
-	pass
 
 class SalarySlipUpdate(BaseModel):
 	transaction_id: Optional[str] = None
 	month: Optional[str] = None
 	year: Optional[int] = None
 	basic_salary: Optional[float] = None
+	pa_percent: Optional[float] = None
+	da_percent: Optional[float] = None
+	pf_percent: Optional[float] = None
+	si_percent: Optional[float] = None
+	deductions: Optional[float] = None
+
+
+class SalarySlipOutWithTeacher(BaseModel):
+	id: int
+	teacher_id: str
+	transaction_id: str
+	month: str
+	year: int
+	basic_salary: float
 	pa: Optional[float] = None
 	da: Optional[float] = None
-	deductions: Optional[float] = None
 	provident_fund: Optional[float] = None
-
-class SalarySlipOut(SalarySlipBase):
-	id: int
+	si: Optional[float] = None
+	deductions: Optional[float] = None
 	total_compensation: float
 	pdf_path: str
 	created_at: datetime
 	updated_at: datetime
+	teacher: TeacherInfo
+
 	class Config:
-		orm_mode = True
+		from_attributes = True
 
 # Helper to get teacher info
 def get_teacher_info(db: Session, teacher_id: str):
@@ -58,7 +85,7 @@ def get_teacher_info(db: Session, teacher_id: str):
 	return teacher
 
 # POST: Create salary slip
-@router.post("/create", response_model=SalarySlipOut, status_code=status.HTTP_201_CREATED)
+@router.post("/create", response_model=SalarySlipOutWithTeacher, status_code=status.HTTP_201_CREATED)
 def create_salary_slip(
 	teacher_id: str = Form(...),
 	transaction_id: str = Form(...),
@@ -131,20 +158,141 @@ def create_salary_slip(
 		s.pdf_path = pdf_path
 	db.commit()
 
-	return slip
+	# attach teacher info for response
+	teacher_db = db.query(Teacher).filter_by(teacher_id=teacher_id).first()
+	teacher_data = None
+	if teacher_db:
+		try:
+			profile_photo_path = os.path.relpath(str(teacher_db.profile_photo), os.getcwd()) if teacher_db.profile_photo else None
+		except Exception:
+			profile_photo_path = teacher_db.profile_photo
+		teacher_data = {
+			"teacher_id": teacher_db.teacher_id,
+			"full_name": teacher_db.full_name,
+			"phone_no": teacher_db.phone_no,
+			"email": teacher_db.email,
+			"courses_assigned": teacher_db.courses_assigned,
+			"profile_photo": profile_photo_path,
+			"monthly_salary": teacher_db.monthly_salary,
+			"bank_account_no": teacher_db.bank_account_no,
+			"bank_account_name": teacher_db.bank_account_name,
+			"bank_branch_name": teacher_db.bank_branch_name,
+			"ifsc_code": teacher_db.ifsc_code,
+			"upiid": teacher_db.upiid,
+		}
 
-# GET: All salary slips
-@router.get("/get-all", response_model=List[SalarySlipOut])
+	return {
+		"id": slip.id,
+		"teacher_id": slip.teacher_id,
+		"transaction_id": slip.transaction_id,
+		"month": slip.month,
+		"year": slip.year,
+		"basic_salary": slip.basic_salary,
+		"pa": slip.pa,
+		"da": slip.da,
+		"provident_fund": slip.provident_fund,
+		"si": slip.si,
+		"deductions": slip.deductions,
+		"total_compensation": slip.total_compensation,
+		"pdf_path": slip.pdf_path,
+		"created_at": slip.created_at,
+		"updated_at": slip.updated_at,
+		"teacher": teacher_data,
+	}
+
+# GET: All salary slips (include teacher info)
+@router.get("/get-all", response_model=List[SalarySlipOutWithTeacher])
 def get_all_salary_slips(db: Session = Depends(get_db)):
-	return db.query(SalarySlip).all()
+	slips = db.query(SalarySlip).order_by(SalarySlip.created_at).all()
+	result = []
+	for s in slips:
+		teacher = db.query(Teacher).filter_by(teacher_id=s.teacher_id).first()
+		teacher_data = None
+		if teacher:
+			try:
+				profile_photo_path = os.path.relpath(str(teacher.profile_photo), os.getcwd()) if teacher.profile_photo else None
+			except Exception:
+				profile_photo_path = teacher.profile_photo
+			teacher_data = {
+				"teacher_id": teacher.teacher_id,
+				"full_name": teacher.full_name,
+				"phone_no": teacher.phone_no,
+				"email": teacher.email,
+				"courses_assigned": teacher.courses_assigned,
+				"profile_photo": profile_photo_path,
+				"monthly_salary": teacher.monthly_salary,
+				"bank_account_no": teacher.bank_account_no,
+				"bank_account_name": teacher.bank_account_name,
+				"bank_branch_name": teacher.bank_branch_name,
+				"ifsc_code": teacher.ifsc_code,
+				"upiid": teacher.upiid,
+			}
+		result.append({
+			"id": s.id,
+			"teacher_id": s.teacher_id,
+			"transaction_id": s.transaction_id,
+			"month": s.month,
+			"year": s.year,
+			"basic_salary": s.basic_salary,
+			"pa": s.pa,
+			"da": s.da,
+			"provident_fund": s.provident_fund,
+			"si": s.si,
+			"deductions": s.deductions,
+			"total_compensation": s.total_compensation,
+			"pdf_path": s.pdf_path,
+			"created_at": s.created_at,
+			"updated_at": s.updated_at,
+			"teacher": teacher_data,
+		})
+	return result
 
 # GET: By id
-@router.get("/get-by/{id}", response_model=SalarySlipOut)
+@router.get("/get-by/{id}", response_model=SalarySlipOutWithTeacher)
 def get_salary_slip_by_id(id: int, db: Session = Depends(get_db)):
 	slip = db.query(SalarySlip).filter_by(id=id).first()
 	if not slip:
 		raise HTTPException(status_code=404, detail="Salary slip not found")
-	return slip
+	teacher = db.query(Teacher).filter_by(teacher_id=slip.teacher_id).first()
+	teacher_data = None
+	if teacher:
+		try:
+			profile_photo_path = os.path.relpath(str(teacher.profile_photo), os.getcwd()) if teacher.profile_photo else None
+		except Exception:
+			profile_photo_path = teacher.profile_photo
+		teacher_data = {
+			"teacher_id": teacher.teacher_id,
+			"full_name": teacher.full_name,
+			"phone_no": teacher.phone_no,
+			"email": teacher.email,
+			"courses_assigned": teacher.courses_assigned,
+			"profile_photo": profile_photo_path,
+			"monthly_salary": teacher.monthly_salary,
+			"bank_account_no": teacher.bank_account_no,
+			"bank_account_name": teacher.bank_account_name,
+			"bank_branch_name": teacher.bank_branch_name,
+			"ifsc_code": teacher.ifsc_code,
+			"upiid": teacher.upiid,
+		}
+
+	return {
+		"id": slip.id,
+		"teacher_id": slip.teacher_id,
+		"transaction_id": slip.transaction_id,
+		"month": slip.month,
+		"year": slip.year,
+		"basic_salary": slip.basic_salary,
+		"pa": slip.pa,
+		"da": slip.da,
+		"provident_fund": slip.provident_fund,
+		"si": slip.si,
+		"deductions": slip.deductions,
+		"total_compensation": slip.total_compensation,
+		"pdf_path": slip.pdf_path,
+		"created_at": slip.created_at,
+		"updated_at": slip.updated_at,
+		"teacher": teacher_data,
+	}
 
 
 # GET: Serve teacher's shared salary PDF
@@ -160,7 +308,7 @@ def view_salary_pdf(teacher_id: str, db: Session = Depends(get_db)):
 	return FileResponse(path=pdf_path, media_type="application/pdf", filename=os.path.basename(pdf_path))
 
 # PUT: Update by id
-@router.put("/put-by/{id}", response_model=SalarySlipOut)
+@router.put("/put-by/{id}", response_model=SalarySlipOutWithTeacher)
 def update_salary_slip(
 	id: int,
 	transaction_id: Optional[str] = Form(None),
@@ -244,7 +392,47 @@ def update_salary_slip(
 		s.pdf_path = pdf_path
 	db.commit()
 
-	return slip
+	# prepare response with teacher info
+	teacher_db = db.query(Teacher).filter_by(teacher_id=slip.teacher_id).first()
+	teacher_data = None
+	if teacher_db:
+		try:
+			profile_photo_path = os.path.relpath(str(teacher_db.profile_photo), os.getcwd()) if teacher_db.profile_photo else None
+		except Exception:
+			profile_photo_path = teacher_db.profile_photo
+		teacher_data = {
+			"teacher_id": teacher_db.teacher_id,
+			"full_name": teacher_db.full_name,
+			"phone_no": teacher_db.phone_no,
+			"email": teacher_db.email,
+			"courses_assigned": teacher_db.courses_assigned,
+			"profile_photo": profile_photo_path,
+			"monthly_salary": teacher_db.monthly_salary,
+			"bank_account_no": teacher_db.bank_account_no,
+			"bank_account_name": teacher_db.bank_account_name,
+			"bank_branch_name": teacher_db.bank_branch_name,
+			"ifsc_code": teacher_db.ifsc_code,
+			"upiid": teacher_db.upiid,
+		}
+
+	return {
+		"id": slip.id,
+		"teacher_id": slip.teacher_id,
+		"transaction_id": slip.transaction_id,
+		"month": slip.month,
+		"year": slip.year,
+		"basic_salary": slip.basic_salary,
+		"pa": slip.pa,
+		"da": slip.da,
+		"provident_fund": slip.provident_fund,
+		"si": slip.si,
+		"deductions": slip.deductions,
+		"total_compensation": slip.total_compensation,
+		"pdf_path": slip.pdf_path,
+		"created_at": slip.created_at,
+		"updated_at": slip.updated_at,
+		"teacher": teacher_data,
+	}
 
 # DELETE: By id
 @router.delete("/delete-by/{id}", response_model=dict)
