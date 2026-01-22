@@ -50,6 +50,7 @@ class AdmissionEnquiryUpdate(BaseModel):
     meets_vision_standards: Optional[bool] = None
     counsellor_id: Optional[str] = None
     admission_code: Optional[str] = None
+    course_id: Optional[str] = None
     status: Optional[str] = None
 
 
@@ -58,6 +59,7 @@ class AdmissionEnquiryResponse(AdmissionEnquiryBase):
     created_at: datetime
     updated_at: datetime
     course_name: Optional[str] = None
+    counsellor_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -122,10 +124,11 @@ def get_all_enquiries(db: Session = Depends(get_db)):
     result = []
     for item in items:
         data = {k: v for k, v in item.__dict__.items() if not k.startswith("_")}
-        course = None
-        if item.course_id:
-            course = db.query(Course).filter_by(course_id=item.course_id).first()
+        # Always fetch latest course and counsellor
+        course = db.query(Course).filter_by(course_id=data.get("course_id")).first() if data.get("course_id") else None
+        counsellor = db.query(Counsellor).filter_by(counsellor_id=data.get("counsellor_id")).first() if data.get("counsellor_id") else None
         data["course_name"] = course.course_name if course else None
+        data["counsellor_name"] = counsellor.full_name if counsellor and hasattr(counsellor, "full_name") else None
         result.append(data)
     return result
 
@@ -136,10 +139,11 @@ def get_enquiry(enquiry_id: str, db: Session = Depends(get_db)):
     if not item:
         raise HTTPException(status_code=404, detail="Admission enquiry not found")
     data = {k: v for k, v in item.__dict__.items() if not k.startswith("_")}
-    course = None
-    if item.course_id:
-        course = db.query(Course).filter_by(course_id=item.course_id).first()
+    # Always fetch latest course and counsellor
+    course = db.query(Course).filter_by(course_id=data.get("course_id")).first() if data.get("course_id") else None
+    counsellor = db.query(Counsellor).filter_by(counsellor_id=data.get("counsellor_id")).first() if data.get("counsellor_id") else None
     data["course_name"] = course.course_name if course else None
+    data["counsellor_name"] = counsellor.full_name if counsellor and hasattr(counsellor, "full_name") else None
     return data
 
 
