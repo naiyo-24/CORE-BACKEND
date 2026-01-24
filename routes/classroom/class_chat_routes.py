@@ -1,0 +1,176 @@
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from sqlalchemy.orm import Session
+from typing import List
+from db import get_db, SessionLocal
+from models.classroom.class_chat_models import ClassChatMessage
+from models.classroom.classroom_models import Classroom
+from datetime import datetime
+import json
+
+router = APIRouter(prefix="/api/classrooms", tags=["ClassroomChat"])
+
+
+class ConnectionManager:
+    def __init__(self):
+        # map class_id -> set of websockets
+        self.active: dict[str, set[WebSocket]] = {}
+
+    async def connect(self, class_id: str, websocket: WebSocket):
+        await websocket.accept()
+        self.active.setdefault(class_id, set()).add(websocket)
+
+    def disconnect(self, class_id: str, websocket: WebSocket):
+        conns = self.active.get(class_id)
+        if conns and websocket in conns:
+            conns.remove(websocket)
+
+    async def broadcast(self, class_id: str, message: dict):
+        conns = list(self.active.get(class_id, []))
+        for ws in conns:
+            try:
+                await ws.send_text(json.dumps(message))
+            except Exception:
+                # ignore individual send errors
+                pass
+
+
+manager = ConnectionManager()
+
+
+def is_admin_or_teacher_for_class(db: Session, class_id: str, user_id: str) -> bool:
+    cls = db.query(Classroom).filter(Classroom.class_id == class_id).first()
+    if not cls:
+        return False
+    if cls.admin_id == user_id:
+        return True
+    if cls.teacher_ids and user_id in (cls.teacher_ids or []):
+        return True
+    return False
+
+
+@router.get("/get-by/{class_id}/messages", response_model=List[dict])
+def get_messages(class_id: str, db: Session = Depends(get_db)):
+    msgs = db.query(ClassChatMessage).filter(ClassChatMessage.class_id == class_id).order_by(ClassChatMessage.created_at.asc()).all()
+    return [
+        {
+            "message_id": m.message_id,
+            "class_id": m.class_id,
+            "sender_id": m.sender_id,
+            "sender_role": m.sender_role,
+            "content": m.content,
+            "created_at": m.created_at,
+        }
+        for m in msgs
+    ]
+
+
+@router.post("/post-to/{class_id}/messages")
+def post_message(class_id: str, payload: dict, db: Session = Depends(get_db)):
+    # payload must contain sender_id and sender_role and content
+    sender_id = payload.get("sender_id")
+    sender_role = payload.get("sender_role")
+    content = payload.get("content")
+    if not sender_id or not sender_role or not content:
+        raise HTTPException(status_code=400, detail="sender_id, sender_role and content required")
+    if not is_admin_or_teacher_for_class(db, class_id, sender_id):
+        raise HTTPException(status_code=403, detail="Only class admins (teachers/admin) can post messages")
+    msg = ClassChatMessage(
+        class_id=class_id,
+        sender_id=sender_id,
+        sender_role=sender_role,
+        content=content,
+        created_at=datetime.utcnow(),
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+    # broadcast to websocket clients
+    import asyncio
+
+    asyncio.create_task(manager.broadcast(class_id, {
+        "message_id": msg.message_id,
+        "class_id": msg.class_id,
+        "sender_id": msg.sender_id,
+        "sender_role": msg.sender_role,
+        "content": msg.content,
+        "created_at": msg.created_at.isoformat(),
+    }))
+    return {"message_id": msg.message_id}
+
+
+@router.websocket("/ws/{class_id}/chat")
+async def websocket_chat(websocket: WebSocket, class_id: str, user_id: str = None, role: str = None):
+    # Query parameters: ?user_id=...&role=...
+    await manager.connect(class_id, websocket)
+    db = SessionLocal()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # expect JSON messages from client
+            try:
+                payload = json.loads(data)
+            except Exception:
+                await websocket.send_text(json.dumps({"error": "invalid json"}))
+                continue
+
+            # if client intends to send a chat message, payload should contain 'content' and 'sender_id'
+            content = payload.get("content")
+            sender_id = payload.get("sender_id") or user_id
+            sender_role = payload.get("sender_role") or role
+
+            if not content or not sender_id or not sender_role:
+                # ignore malformed messages
+                await websocket.send_text(json.dumps({"error": "content, sender_id and sender_role required"}))
+                continue
+
+            # only admins (class admin or teacher) can send; others can only receive
+            if not is_admin_or_teacher_for_class(db, class_id, sender_id):
+                await websocket.send_text(json.dumps({"error": "not authorized to send messages"}))
+                continue
+
+            # persist message
+            msg = ClassChatMessage(
+                class_id=class_id,
+                sender_id=sender_id,
+                sender_role=sender_role,
+                content=content,
+                created_at=datetime.utcnow(),
+            )
+            db.add(msg)
+            db.commit()
+            db.refresh(msg)
+
+            # broadcast
+            await manager.broadcast(class_id, {
+                "message_id": msg.message_id,
+                "class_id": msg.class_id,
+                "sender_id": msg.sender_id,
+                "sender_role": msg.sender_role,
+                "content": msg.content,
+                "created_at": msg.created_at.isoformat(),
+            })
+
+    except WebSocketDisconnect:
+        manager.disconnect(class_id, websocket)
+    finally:
+        db.close()
+
+
+@router.delete("/delete/{class_id}/messages/{message_id}")
+def delete_message(class_id: str, message_id: str, requester_id: str, db: Session = Depends(get_db)):
+    """Delete a chat message. Only class admins (teachers/admin) may delete messages."""
+    msg = db.query(ClassChatMessage).filter(ClassChatMessage.message_id == message_id,
+                                           ClassChatMessage.class_id == class_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    # only class admin/teachers can delete
+    if not is_admin_or_teacher_for_class(db, class_id, requester_id):
+        raise HTTPException(status_code=403, detail="Not authorized to delete message")
+
+    db.delete(msg)
+    db.commit()
+    # broadcast deletion event so clients can remove message locally
+    import asyncio
+
+    asyncio.create_task(manager.broadcast(class_id, {"deleted_message_id": message_id}))
+    return {"message": "deleted", "message_id": message_id}
