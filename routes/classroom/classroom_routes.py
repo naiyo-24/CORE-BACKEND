@@ -36,6 +36,7 @@ class ClassroomResponse(BaseModel):
 
 router = APIRouter(prefix="/api/classrooms", tags=["Classrooms"])
 
+# Directory to store uploaded class photos
 UPLOAD_DIR = "uploads/classrooms"
 
 
@@ -48,7 +49,7 @@ async def save_class_photo(class_id: str, photo: UploadFile):
         f.write(await photo.read())
     return file_path
 
-
+# Create a new classroom endpoint
 @router.post("/create", response_model=ClassroomResponse)
 async def create_classroom(
     class_name: str = Form(...),
@@ -84,13 +85,13 @@ async def create_classroom(
     db.refresh(classroom)
     return classroom
 
-
+# Get all classrooms
 @router.get("/get-all", response_model=List[ClassroomResponse])
 def get_all_classrooms(db: Session = Depends(get_db)):
     classrooms = db.query(Classroom).all()
     return classrooms
 
-
+# Get classroom by ID
 @router.get("/get-by/{class_id}", response_model=ClassroomResponse)
 def get_classroom_by_id(class_id: str, db: Session = Depends(get_db)):
     classroom = db.query(Classroom).filter(Classroom.class_id == class_id).first()
@@ -98,27 +99,27 @@ def get_classroom_by_id(class_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Classroom not found")
     return classroom
 
-
+# Get classrooms by teacher_id
 @router.get("/get/by-teacher/{teacher_id}", response_model=List[ClassroomResponse])
 def get_classrooms_by_teacher(teacher_id: str, db: Session = Depends(get_db)):
     classrooms = db.query(Classroom).all()
     result = [c for c in classrooms if c.teacher_ids and teacher_id in (c.teacher_ids or [])]
     return result
 
-
+# Get classrooms by student_id
 @router.get("/get/by-student/{student_id}", response_model=List[ClassroomResponse])
 def get_classrooms_by_student(student_id: str, db: Session = Depends(get_db)):
     classrooms = db.query(Classroom).all()
     result = [c for c in classrooms if c.student_ids and student_id in (c.student_ids or [])]
     return result
 
-
+# Get classrooms by admin_id
 @router.get("/get/by-admin/{admin_id}", response_model=List[ClassroomResponse])
 def get_classrooms_by_admin(admin_id: str, db: Session = Depends(get_db)):
     classrooms = db.query(Classroom).filter(Classroom.admin_id == admin_id).all()
     return classrooms
 
-
+# Update classroom by teacher
 @router.put("/update-by/teacher/{teacher_id}/{class_id}", response_model=ClassroomResponse)
 async def update_classroom_by_teacher(
     teacher_id: str,
@@ -149,7 +150,7 @@ async def update_classroom_by_teacher(
     db.refresh(classroom)
     return classroom
 
-
+# Update classroom by admin
 @router.put("/update-by/admin/{admin_id}/{class_id}", response_model=ClassroomResponse)
 async def update_classroom_by_admin(
     admin_id: str,
@@ -183,7 +184,7 @@ async def update_classroom_by_admin(
     db.refresh(classroom)
     return classroom
 
-
+# Delete classroom by admin
 @router.delete("/delete-by/admin/{admin_id}/{class_id}")
 def delete_classroom_by_admin(admin_id: str, class_id: str, db: Session = Depends(get_db)):
     classroom = db.query(Classroom).filter(Classroom.class_id == class_id).first()
@@ -199,7 +200,7 @@ def delete_classroom_by_admin(admin_id: str, class_id: str, db: Session = Depend
         shutil.rmtree(dir_path)
     return {"message": "Classroom deleted"}
 
-
+# Delete classroom by teacher
 @router.delete("/delete-by/teacher/{teacher_id}/{class_id}")
 def delete_classroom_by_teacher(teacher_id: str, class_id: str, db: Session = Depends(get_db)):
     classroom = db.query(Classroom).filter(Classroom.class_id == class_id).first()
@@ -215,10 +216,11 @@ def delete_classroom_by_teacher(teacher_id: str, class_id: str, db: Session = De
         shutil.rmtree(dir_path)
     return {"message": "Classroom deleted"}
 
-
+# Bulk delete classrooms
 class BulkDeleteRequest(BaseModel):
     class_ids: List[str]
 
+# Bulk delete classrooms endpoint
 @router.delete("/delete/bulk")
 def delete_classrooms_bulk(request: BulkDeleteRequest, db: Session = Depends(get_db)):
     deleted = 0
