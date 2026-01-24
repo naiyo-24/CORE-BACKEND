@@ -9,7 +9,7 @@ import json
 
 router = APIRouter(prefix="/api/classrooms", tags=["ClassroomChat"])
 
-
+# WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
         # map class_id -> set of websockets
@@ -36,7 +36,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-
+# helper to check if user is admin or teacher for the class
 def is_admin_or_teacher_for_class(db: Session, class_id: str, user_id: str) -> bool:
     cls = db.query(Classroom).filter(Classroom.class_id == class_id).first()
     if not cls:
@@ -47,7 +47,7 @@ def is_admin_or_teacher_for_class(db: Session, class_id: str, user_id: str) -> b
         return True
     return False
 
-
+# get all messages for a class
 @router.get("/get-by/{class_id}/messages", response_model=List[dict])
 def get_messages(class_id: str, db: Session = Depends(get_db)):
     msgs = db.query(ClassChatMessage).filter(ClassChatMessage.class_id == class_id).order_by(ClassChatMessage.created_at.asc()).all()
@@ -63,7 +63,7 @@ def get_messages(class_id: str, db: Session = Depends(get_db)):
         for m in msgs
     ]
 
-
+# POST a new message to class chat on the basis of sender role- only class admins (teachers/admin) can post messages
 @router.post("/post-to/{class_id}/messages")
 def post_message(class_id: str, payload: dict, db: Session = Depends(get_db)):
     # payload must contain sender_id and sender_role and content
@@ -97,7 +97,7 @@ def post_message(class_id: str, payload: dict, db: Session = Depends(get_db)):
     }))
     return {"message_id": msg.message_id}
 
-
+# WebSocket endpoint for real-time chat
 @router.websocket("/ws/{class_id}/chat")
 async def websocket_chat(websocket: WebSocket, class_id: str, user_id: str = None, role: str = None):
     # Query parameters: ?user_id=...&role=...
