@@ -8,6 +8,8 @@ class Announcement(Base):
 	announcement_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
 	headline = Column(String(255), nullable=False)
 	description = Column(Text, nullable=False)
+	# role: which audience this announcement is for (student, counsellor, teacher)
+	role = Column(String(50), nullable=False, default="student")
 	active_status = Column(Boolean, default=True)
 	created_at = Column(DateTime, default=datetime.utcnow)
 	updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
