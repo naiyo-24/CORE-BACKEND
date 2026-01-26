@@ -4,6 +4,8 @@ import os
 import json
 from db import get_db
 from models.classroom.classroom_models import Classroom
+from models.auth.student_models import Student
+from models.auth.teacher_models import Teacher
 from services.class_id_generator import generate_class_id
 from typing import List, Optional
 from datetime import datetime
@@ -26,6 +28,8 @@ class ClassroomResponse(BaseModel):
     class_photo: Optional[str] = None
     teacher_ids: Optional[List[str]] = None
     student_ids: Optional[List[str]] = None
+    teacher_details: Optional[List[dict]] = None
+    student_details: Optional[List[dict]] = None
     admin_id: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -48,6 +52,15 @@ async def save_class_photo(class_id: str, photo: UploadFile):
     with open(file_path, "wb") as f:
         f.write(await photo.read())
     return file_path
+
+
+# Helper to fetch person summaries (id + full_name) preserving given order
+def _person_summaries(db: Session, model, id_attr: str, ids: Optional[List[str]]):
+    if not ids:
+        return []
+    rows = db.query(model).filter(getattr(model, id_attr).in_(ids)).all()
+    mapping = {getattr(r, id_attr): getattr(r, 'full_name', None) for r in rows}
+    return [{"id": i, "full_name": mapping.get(i)} for i in ids]
 
 # Create a new classroom endpoint
 @router.post("/create", response_model=ClassroomResponse)
@@ -83,13 +96,28 @@ async def create_classroom(
     db.add(classroom)
     db.commit()
     db.refresh(classroom)
-    return classroom
+    return {
+        **{k: getattr(classroom, k) for k in [
+            'class_id', 'class_name', 'class_description', 'class_photo', 'teacher_ids', 'student_ids', 'admin_id', 'created_at', 'updated_at'
+        ]},
+        'teacher_details': _person_summaries(db, Teacher, 'teacher_id', classroom.teacher_ids),
+        'student_details': _person_summaries(db, Student, 'student_id', classroom.student_ids),
+    }
 
 # Get all classrooms
 @router.get("/get-all", response_model=List[ClassroomResponse])
 def get_all_classrooms(db: Session = Depends(get_db)):
     classrooms = db.query(Classroom).all()
-    return classrooms
+    result = []
+    for c in classrooms:
+        result.append({
+            **{k: getattr(c, k) for k in [
+                'class_id', 'class_name', 'class_description', 'class_photo', 'teacher_ids', 'student_ids', 'admin_id', 'created_at', 'updated_at'
+            ]},
+            'teacher_details': _person_summaries(db, Teacher, 'teacher_id', c.teacher_ids),
+            'student_details': _person_summaries(db, Student, 'student_id', c.student_ids),
+        })
+    return result
 
 # Get classroom by ID
 @router.get("/get-by/{class_id}", response_model=ClassroomResponse)
@@ -97,27 +125,60 @@ def get_classroom_by_id(class_id: str, db: Session = Depends(get_db)):
     classroom = db.query(Classroom).filter(Classroom.class_id == class_id).first()
     if not classroom:
         raise HTTPException(status_code=404, detail="Classroom not found")
-    return classroom
+    return {
+        **{k: getattr(classroom, k) for k in [
+            'class_id', 'class_name', 'class_description', 'class_photo', 'teacher_ids', 'student_ids', 'admin_id', 'created_at', 'updated_at'
+        ]},
+        'teacher_details': _person_summaries(db, Teacher, 'teacher_id', classroom.teacher_ids),
+        'student_details': _person_summaries(db, Student, 'student_id', classroom.student_ids),
+    }
 
 # Get classrooms by teacher_id
 @router.get("/get/by-teacher/{teacher_id}", response_model=List[ClassroomResponse])
 def get_classrooms_by_teacher(teacher_id: str, db: Session = Depends(get_db)):
     classrooms = db.query(Classroom).all()
-    result = [c for c in classrooms if c.teacher_ids and teacher_id in (c.teacher_ids or [])]
+    result = []
+    for c in classrooms:
+        if c.teacher_ids and teacher_id in (c.teacher_ids or []):
+            result.append({
+                **{k: getattr(c, k) for k in [
+                    'class_id', 'class_name', 'class_description', 'class_photo', 'teacher_ids', 'student_ids', 'admin_id', 'created_at', 'updated_at'
+                ]},
+                'teacher_details': _person_summaries(db, Teacher, 'teacher_id', c.teacher_ids),
+                'student_details': _person_summaries(db, Student, 'student_id', c.student_ids),
+            })
     return result
 
 # Get classrooms by student_id
 @router.get("/get/by-student/{student_id}", response_model=List[ClassroomResponse])
 def get_classrooms_by_student(student_id: str, db: Session = Depends(get_db)):
     classrooms = db.query(Classroom).all()
-    result = [c for c in classrooms if c.student_ids and student_id in (c.student_ids or [])]
+    result = []
+    for c in classrooms:
+        if c.student_ids and student_id in (c.student_ids or []):
+            result.append({
+                **{k: getattr(c, k) for k in [
+                    'class_id', 'class_name', 'class_description', 'class_photo', 'teacher_ids', 'student_ids', 'admin_id', 'created_at', 'updated_at'
+                ]},
+                'teacher_details': _person_summaries(db, Teacher, 'teacher_id', c.teacher_ids),
+                'student_details': _person_summaries(db, Student, 'student_id', c.student_ids),
+            })
     return result
 
 # Get classrooms by admin_id
 @router.get("/get/by-admin/{admin_id}", response_model=List[ClassroomResponse])
 def get_classrooms_by_admin(admin_id: str, db: Session = Depends(get_db)):
     classrooms = db.query(Classroom).filter(Classroom.admin_id == admin_id).all()
-    return classrooms
+    result = []
+    for c in classrooms:
+        result.append({
+            **{k: getattr(c, k) for k in [
+                'class_id', 'class_name', 'class_description', 'class_photo', 'teacher_ids', 'student_ids', 'admin_id', 'created_at', 'updated_at'
+            ]},
+            'teacher_details': _person_summaries(db, Teacher, 'teacher_id', c.teacher_ids),
+            'student_details': _person_summaries(db, Student, 'student_id', c.student_ids),
+        })
+    return result
 
 # Update classroom by teacher
 @router.put("/update-by/teacher/{teacher_id}/{class_id}", response_model=ClassroomResponse)
@@ -148,7 +209,13 @@ async def update_classroom_by_teacher(
     classroom.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(classroom)
-    return classroom
+    return {
+        **{k: getattr(classroom, k) for k in [
+            'class_id', 'class_name', 'class_description', 'class_photo', 'teacher_ids', 'student_ids', 'admin_id', 'created_at', 'updated_at'
+        ]},
+        'teacher_details': _person_summaries(db, Teacher, 'teacher_id', classroom.teacher_ids),
+        'student_details': _person_summaries(db, Student, 'student_id', classroom.student_ids),
+    }
 
 # Update classroom by admin
 @router.put("/update-by/admin/{admin_id}/{class_id}", response_model=ClassroomResponse)
@@ -182,7 +249,13 @@ async def update_classroom_by_admin(
     classroom.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(classroom)
-    return classroom
+    return {
+        **{k: getattr(classroom, k) for k in [
+            'class_id', 'class_name', 'class_description', 'class_photo', 'teacher_ids', 'student_ids', 'admin_id', 'created_at', 'updated_at'
+        ]},
+        'teacher_details': _person_summaries(db, Teacher, 'teacher_id', classroom.teacher_ids),
+        'student_details': _person_summaries(db, Student, 'student_id', classroom.student_ids),
+    }
 
 # Delete classroom by admin
 @router.delete("/delete-by/admin/{admin_id}/{class_id}")

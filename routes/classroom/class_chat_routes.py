@@ -8,6 +8,9 @@ from datetime import datetime
 import json
 import threading
 import asyncio
+from models.auth.student_models import Student
+from models.auth.teacher_models import Teacher
+from models.auth.admin_models import Admin
 
 router = APIRouter(prefix="/api/classrooms", tags=["ClassroomChat"])
 
@@ -49,6 +52,22 @@ def is_admin_or_teacher_for_class(db: Session, class_id: str, user_id: str) -> b
         return True
     return False
 
+
+def _resolve_sender_name(db: Session, sender_role: str, sender_id: str):
+    try:
+        if sender_role == 'teacher':
+            t = db.query(Teacher).filter(Teacher.teacher_id == sender_id).first()
+            return t.full_name if t else None
+        if sender_role == 'student':
+            s = db.query(Student).filter(Student.student_id == sender_id).first()
+            return s.full_name if s else None
+        if sender_role == 'admin':
+            a = db.query(Admin).filter(Admin.id == sender_id).first()
+            return getattr(a, 'email', None) if a else None
+    except Exception:
+        return None
+    return None
+
 # get all messages for a class
 @router.get("/get-by/{class_id}/messages", response_model=List[dict])
 def get_messages(class_id: str, db: Session = Depends(get_db)):
@@ -59,6 +78,7 @@ def get_messages(class_id: str, db: Session = Depends(get_db)):
             "class_id": m.class_id,
             "sender_id": m.sender_id,
             "sender_role": m.sender_role,
+            "sender_name": _resolve_sender_name(db, m.sender_role, m.sender_id),
             "content": m.content,
             "created_at": m.created_at,
         }
@@ -86,6 +106,8 @@ def post_message(class_id: str, payload: dict, db: Session = Depends(get_db)):
     db.add(msg)
     db.commit()
     db.refresh(msg)
+    # resolve sender name for broadcast
+    sender_name = _resolve_sender_name(db, msg.sender_role, msg.sender_id)
     # broadcast to websocket clients in a background thread to avoid "no running event loop"
     def _broadcast():
         asyncio.run(manager.broadcast(class_id, {
@@ -93,6 +115,7 @@ def post_message(class_id: str, payload: dict, db: Session = Depends(get_db)):
             "class_id": msg.class_id,
             "sender_id": msg.sender_id,
             "sender_role": msg.sender_role,
+            "sender_name": sender_name,
             "content": msg.content,
             "created_at": msg.created_at.isoformat(),
         }))
@@ -174,6 +197,7 @@ async def websocket_chat(websocket: WebSocket, class_id: str, user_id: str = Non
                 "class_id": msg.class_id,
                 "sender_id": msg.sender_id,
                 "sender_role": msg.sender_role,
+                "sender_name": _resolve_sender_name(db, msg.sender_role, msg.sender_id),
                 "content": msg.content,
                 "created_at": msg.created_at.isoformat(),
             })
@@ -221,6 +245,7 @@ def student_get_messages(class_id: str, student_id: str, db: Session = Depends(g
             "class_id": m.class_id,
             "sender_id": m.sender_id,
             "sender_role": m.sender_role,
+            "sender_name": _resolve_sender_name(db, m.sender_role, m.sender_id),
             "content": m.content,
             "created_at": m.created_at,
         }
@@ -265,6 +290,7 @@ def student_post_message(class_id: str, payload: dict, student_id: str, allow: b
             "class_id": msg.class_id,
             "sender_id": msg.sender_id,
             "sender_role": msg.sender_role,
+            "sender_name": _resolve_sender_name(db, msg.sender_role, msg.sender_id),
             "content": msg.content,
             "created_at": msg.created_at.isoformat(),
         }))
