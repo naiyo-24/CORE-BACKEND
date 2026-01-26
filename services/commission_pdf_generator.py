@@ -76,136 +76,150 @@ def generate_monthly_commission_pdf(output_dir: str, counsellor: dict, commissio
     file_path = os.path.join(output_dir, filename)
     c = canvas.Canvas(file_path, pagesize=A4)
     width, height = A4
-    margin = 18 * mm
+    margin = 20 * mm  # Increased margin for better spacing
 
     # header: logo + company details
     logo_path = os.path.join(os.getcwd(), "static", "logo.png")
     y_top = height - margin
+    logo_w = 35 * mm  # Slightly larger logo
+    logo_h = 35 * mm
     if os.path.exists(logo_path):
         try:
-            c.drawImage(logo_path, margin, y_top - 30 * mm, width=30 * mm, height=30 * mm, preserveAspectRatio=True, mask='auto')
+            c.drawImage(logo_path, margin, y_top - logo_h, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
         except Exception:
             pass
 
-    company_x = margin + 35 * mm
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(company_x, y_top - 6, "VWINGS24X7")
+    company_x = margin + logo_w + 8 * mm  # More space after logo
+    c.setFont("Helvetica-Bold", 16)  # Larger font for company name
+    c.drawString(company_x, y_top - 6 * mm, "VWINGS24X7")
     c.setFont("Helvetica", 9)
     # company contact block (placeholder values - update as needed)
     company_address = "Address: [Your Address]"
     company_phone = "Phone: [Your Phone]"
     company_email = "Email: [your-email@example.com]"
-    c.drawString(company_x, y_top - 22, company_address)
-    c.drawString(company_x, y_top - 36, company_phone + "    " + company_email)
+    c.drawString(company_x, y_top - 14 * mm, company_address)
+    c.drawString(company_x, y_top - 20 * mm, f"{company_phone}    {company_email}")
 
     # title and month on the right
-    c.setFont("Helvetica-Bold", 12)
-    c.drawRightString(width - margin, y_top - 6, f"Monthly Commission Report")
-    c.setFont("Helvetica", 9)
-    c.drawRightString(width - margin, y_top - 22, f"Month: {month_year}")
+    c.setFont("Helvetica-Bold", 12)  # Slightly larger
+    c.drawRightString(width - margin, y_top - 6 * mm, "Monthly Commission Report")
+    c.setFont("Helvetica", 10)
+    c.drawRightString(width - margin, y_top - 14 * mm, f"Month: {month_year}")
 
     # divider
-    y = y_top - 44
+    y = y_top - logo_h - 10 * mm  # More space before divider
     c.setStrokeColor(colors.black)
     c.setLineWidth(1)
     c.line(margin, y, width - margin, y)
 
     # counsellor details block
-    y -= 18
+    y -= 10 * mm  # More space
     c.setFont("Helvetica-Bold", 11)
     c.drawString(margin, y, "Counsellor Details")
-    y -= 12
+    y -= 8 * mm
     c.setFont("Helvetica", 10)
     c.drawString(margin, y, f"Name: {counsellor.get('full_name', '') or ''}")
-    c.drawString(margin + 110 * mm, y, f"ID: {counsellor.get('counsellor_id', '') or ''}")
-    y -= 12
+    c.drawString(width - margin - 80 * mm, y, f"ID: {counsellor.get('counsellor_id', '') or ''}")
+    y -= 6 * mm
     c.drawString(margin, y, f"Phone: {counsellor.get('phone_no', '') or ''}")
-    c.drawString(margin + 110 * mm, y, f"Email: {counsellor.get('email', '') or ''}")
-    y -= 12
+    c.drawString(width - margin - 80 * mm, y, f"Email: {counsellor.get('email', '') or ''}")
+    y -= 6 * mm
     addr = counsellor.get('address', '') or ''
     if addr:
-        # wrap address if long
-        c.drawString(margin, y, f"Address: {addr}")
-        y -= 12
+        # wrap address if long (simple slice)
+        addr_display = addr if len(addr) < 80 else addr[:77] + '...'
+        c.drawString(margin, y, f"Address: {addr_display}")
+        y -= 8 * mm
 
     # second divider before table
-    y -= 6
+    y -= 4 * mm
     c.line(margin, y, width - margin, y)
-    y -= 14
+    y -= 10 * mm  # More space before table
 
     # table header: compute proportional columns to fit within margins
-    c.setFont("Helvetica-Bold", 9)
+    c.setFont("Helvetica-Bold", 10)  # Larger font for headers
     table_x = margin
     table_width = width - 2 * margin
     # fractions for columns: ENQ, COURSE, STUDENT, COMM%, AMT, TXN
-    col_fracs = [0.12, 0.12, 0.36, 0.12, 0.12, 0.16]
-    # normalize if rounding causes slight difference
+    col_fracs = [0.12, 0.12, 0.36, 0.10, 0.14, 0.16]
     total_frac = sum(col_fracs)
     col_fracs = [f / total_frac for f in col_fracs]
     cols = [table_x]
     col_widths = []
     acc = 0.0
     for f in col_fracs:
-        col_widths.append(f * table_width)
+        w = f * table_width
+        col_widths.append(w)
         acc += f
         cols.append(table_x + acc * table_width)
-    # cols now has starting x for each column plus an extra right edge
     headers = ["Enquiry ID", "Course ID", "Student Name", "Commission %", "Amount", "Transaction ID"]
+    padding_x = 3 * mm  # Increased padding
     for i, h in enumerate(headers):
-        c.drawString(cols[i], y, h)
-    y -= 14
-    c.setFont("Helvetica", 10)
+        c.drawString(cols[i] + padding_x, y, h)
+    line_h = 8 * mm  # Increased line height for better spacing
+    y -= line_h
+    c.setFont("Helvetica", 9)
 
     total_amount = 0.0
     for comm in commissions:
         # Enquiry ID
-        c.drawString(cols[0], y, str(comm.get('enquiry_id', '')))
+        c.drawString(cols[0] + padding_x, y, str(comm.get('enquiry_id', '')))
         # Course ID
-        c.drawString(cols[1], y, str(comm.get('course_id', '')))
+        c.drawString(cols[1] + padding_x, y, str(comm.get('course_id', '')))
         # Student Name (truncate to fit column)
         student = str(comm.get('student_name', '') or '')
-        max_chars = int(col_widths[2] / (6))  # approx chars per width
+        max_chars = int(col_widths[2] / (5))  # Adjusted for font size
         if len(student) > max_chars:
             student = student[:max_chars - 3] + '...'
-        c.drawString(cols[2], y, student)
+        c.drawString(cols[2] + padding_x, y, student)
         # Commission % (right aligned)
-        pct_x = cols[3] + col_widths[3] - 4
+        pct_x = cols[3] + col_widths[3] - padding_x
         c.drawRightString(pct_x, y, f"{comm.get('commission_percentage', 0):.2f}")
         # Amount (right aligned)
-        amt_x = cols[4] + col_widths[4] - 4
+        amt_x = cols[4] + col_widths[4] - padding_x
         c.drawRightString(amt_x, y, f"{comm.get('commission_amount', 0):.2f}")
         # Transaction ID (truncate if long)
         tx = str(comm.get('transaction_id', '') or '')
-        max_tx_chars = int(col_widths[5] / (6))
+        max_tx_chars = int(col_widths[5] / (5))
         if len(tx) > max_tx_chars:
             tx = tx[:max_tx_chars - 3] + '...'
-        c.drawString(cols[5], y, tx)
+        c.drawString(cols[5] + padding_x, y, tx)
         total_amount += float(comm.get('commission_amount', 0) or 0)
-        y -= 14
-        if y < 80:
+        y -= line_h
+        if y < 100:  # Adjusted threshold for new page
             c.showPage()
             # redraw header on new page
+            y_top_new = height - margin
             if os.path.exists(logo_path):
                 try:
-                    c.drawImage(logo_path, margin, height - margin - 30 * mm, width=30 * mm, height=30 * mm, preserveAspectRatio=True, mask='auto')
+                    c.drawImage(logo_path, margin, y_top_new - logo_h, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
                 except Exception:
                     pass
-            c.setFont("Helvetica-Bold", 10)
-            # redraw table headers on new page
-            header_y = height - margin - 50
-            for i, h in enumerate(headers):
-                c.drawString(cols[i], header_y, h)
-            y = height - margin - 66
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(company_x, y_top_new - 6 * mm, "VWINGS24X7")
+            c.setFont("Helvetica-Bold", 12)
+            c.drawRightString(width - margin, y_top_new - 6 * mm, "Monthly Commission Report")
             c.setFont("Helvetica", 10)
+            c.drawRightString(width - margin, y_top_new - 14 * mm, f"Month: {month_year}")
+            # divider
+            y_div = y_top_new - logo_h - 10 * mm
+            c.line(margin, y_div, width - margin, y_div)
+            # table headers
+            y = y_div - 20 * mm
+            c.setFont("Helvetica-Bold", 10)
+            for i, h in enumerate(headers):
+                c.drawString(cols[i] + padding_x, y, h)
+            y -= line_h
+            c.setFont("Helvetica", 9)
 
     # totals
-    if y < 120:
+    if y < 140:  # Adjusted
         c.showPage()
-        y = height - margin - 18
-    y -= 6
+        y = height - margin - 20
+    y -= 10
     c.line(margin, y, width - margin, y)
-    y -= 18
-    c.setFont("Helvetica-Bold", 11)
+    y -= 20
+    c.setFont("Helvetica-Bold", 12)  # Larger for totals
     c.drawString(margin, y, f"Total Commission Amount: {total_amount:.2f}")
 
     # payment summary: derive overall payment status and transaction id(s)
@@ -223,7 +237,7 @@ def generate_monthly_commission_pdf(output_dir: str, counsellor: dict, commissio
     elif len(txs) > 1:
         tx_summary = ', '.join(list(txs)[:3]) + (', ...' if len(txs) > 3 else '')
 
-    y -= 18
+    y -= 20
     c.setFont("Helvetica", 10)
     c.drawString(margin, y, f"Payment Status: {payment_status_summary}")
     c.drawRightString(width - margin, y, f"Transaction ID: {tx_summary}")
