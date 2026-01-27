@@ -238,9 +238,9 @@ def update_course(
             for field, value in update.dict(exclude_unset=True).items():
                 if field in ["general_data", "executive_data"] and value is not None:
                     existing_data = getattr(course, field) or {}
-                    existing_data.update(value)
-                    existing_data["updated_at"] = datetime.utcnow().isoformat()
-                    setattr(course, field, existing_data)
+                    updated_data = {**existing_data, **value}
+                    updated_data["updated_at"] = datetime.utcnow().isoformat()
+                    setattr(course, field, updated_data)
                 elif value is not None:
                     setattr(course, field, value)
         except Exception as e:
