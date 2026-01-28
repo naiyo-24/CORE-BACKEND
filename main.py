@@ -10,11 +10,8 @@ from routes.admission import admission_code_routes
 from routes.admission import admission_enquiry_routes
 from routes.ads import ads_routes
 from routes.announcement import announcement_routes
-from routes.salary import salary_routes
 from routes.classroom import classroom_routes
 from routes.classroom import class_chat_routes
-from routes.fees import fees_routes
-from routes.commission import commission_routes
 
 # Create FastAPI app
 app = FastAPI(
@@ -58,11 +55,8 @@ app.include_router(admission_code_routes.router)
 app.include_router(admission_enquiry_routes.router)
 app.include_router(ads_routes.router)
 app.include_router(announcement_routes.router)
-app.include_router(salary_routes.router)
 app.include_router(classroom_routes.router)
 app.include_router(class_chat_routes.router)
-app.include_router(fees_routes.router)
-app.include_router(commission_routes.router)
 
 # Create database tables on startup
 @app.on_event("startup")
