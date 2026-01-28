@@ -9,13 +9,19 @@ def generate_salary_slip(teacher, salaries, output_path):
     # Use a default font
     try:
         font = ImageFont.truetype("arial.ttf", 20)
+        bold_font = ImageFont.truetype("arialbd.ttf", 20)  # Bold font
         small_font = ImageFont.truetype("arial.ttf", 14)
+        small_bold_font = ImageFont.truetype("arialbd.ttf", 14)
     except:
         font = ImageFont.load_default()
+        bold_font = ImageFont.load_default()
         small_font = ImageFont.load_default()
+        small_bold_font = ImageFont.load_default()
     
-    # Teacher details
+    # Teacher details in 4x4 grid
     y = 300
+    left_x = 50
+    right_x = img.width // 2 + 50
     details = [
         f"Name: {teacher.full_name}",
         f"Phone: {teacher.phone_no}",
@@ -26,8 +32,9 @@ def generate_salary_slip(teacher, salaries, output_path):
         f"IFSC: {teacher.ifsc_code}",
         f"UPI ID: {teacher.upiid}"
     ]
-    for detail in details:
-        draw.text((50, y), detail, fill="black", font=small_font)
+    for i in range(4):
+        draw.text((left_x, y), details[i], fill="black", font=small_font)
+        draw.text((right_x, y), details[i+4], fill="black", font=small_font)
         y += 25
     
     # Divider
@@ -38,7 +45,7 @@ def generate_salary_slip(teacher, salaries, output_path):
     table_headers = ["Month", "Year", "Basic Salary", "PF", "SI", "DA", "PA", "Total Salary", "Transaction ID"]
     x_positions = [50, 120, 180, 250, 300, 350, 400, 450, 550]
     for i, header in enumerate(table_headers):
-        draw.text((x_positions[i], y), header, fill="black", font=small_font)
+        draw.text((x_positions[i], y), header, fill="black", font=small_bold_font)
     y += 25
     
     # Table data for each salary
